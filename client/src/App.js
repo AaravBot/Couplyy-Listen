@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { io } from "socket.io-client";
 
-const socket = io("http://localhost:5000");
+const socket = io("couplyy-listen-production.up.railway.app");
 
 function App() {
   const [roomId, setRoomId] = useState("");
