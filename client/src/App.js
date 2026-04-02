@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { io } from "socket.io-client";
 
-const socket = io("couplyy-listen-production.up.railway.app");
+const socket = io("https://couplyy-listen-production.up.railway.app");
 
 function App() {
   const [roomId, setRoomId] = useState("");
@@ -33,6 +33,7 @@ function App() {
     setJoined(true);
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !joined) return;
@@ -135,9 +136,9 @@ function App() {
 
           <p>Share this link:</p>
           <input
-            value={`http://localhost:3000/?room=${roomId}&pass=${password}`}
+            value={`${window.location.origin}/?room=${roomId}&pass=${password}`}
             readOnly
-            style={{ width: "350px" }}
+            style={{ width: "400px" }}
           />
 
           <br /><br />
