@@ -33,7 +33,6 @@ function App() {
     setJoined(true);
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !joined) return;
@@ -108,7 +107,7 @@ function App() {
 
       socket.off("sync_state", handleSync);
     };
-  }, [joined]);
+  }, [joined,roomId]);
 
   return (
     <div style={{ padding: "40px" }}>
