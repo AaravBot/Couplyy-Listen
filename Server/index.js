@@ -34,7 +34,12 @@ io.on("connection", (socket) => {
     socket.join(roomId);
 
     const isHost = rooms[roomId].host === socket.id;
+
+    // 🔥 Send role to current user
     socket.emit("role", { isHost });
+
+    // 🔥 ALSO ensure host is reinforced
+    io.to(rooms[roomId].host).emit("role", { isHost: true });
 
     if (rooms[roomId].state) {
       socket.emit("sync_state", rooms[roomId].state);
@@ -61,6 +66,8 @@ io.on("connection", (socket) => {
 
         if (clients.length > 0) {
           rooms[roomId].host = clients[0];
+
+          // 🔥 NEW HOST gets role
           io.to(clients[0]).emit("role", { isHost: true });
         }
       }
@@ -70,6 +77,9 @@ io.on("connection", (socket) => {
   });
 });
 
-server.listen(5000, () => {
-  console.log("Server running on port 5000");
+
+const PORT = process.env.PORT || 5000;
+
+server.listen(PORT, () => {
+  console.log("Server running on port", PORT);
 });
