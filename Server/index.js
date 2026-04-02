@@ -4,19 +4,12 @@ const { Server } = require("socket.io");
 const cors = require("cors");
 
 const app = express();
-
-app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST"]
-}));
+app.use(cors());
 
 const server = http.createServer(app);
 
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  },
+  cors: { origin: "*" },
 });
 
 let rooms = {};
@@ -29,6 +22,7 @@ io.on("connection", (socket) => {
       rooms[roomId] = {
         password,
         state: null,
+        host: socket.id,
       };
     }
 
@@ -39,6 +33,9 @@ io.on("connection", (socket) => {
 
     socket.join(roomId);
 
+    const isHost = rooms[roomId].host === socket.id;
+    socket.emit("role", { isHost });
+
     if (rooms[roomId].state) {
       socket.emit("sync_state", rooms[roomId].state);
     }
@@ -46,6 +43,8 @@ io.on("connection", (socket) => {
 
   socket.on("sync_event", ({ roomId, state }) => {
     if (!rooms[roomId]) return;
+
+    if (rooms[roomId].host !== socket.id) return;
 
     rooms[roomId].state = {
       ...state,
@@ -56,12 +55,21 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
+    for (let roomId in rooms) {
+      if (rooms[roomId].host === socket.id) {
+        const clients = Array.from(io.sockets.adapter.rooms.get(roomId) || []);
+
+        if (clients.length > 0) {
+          rooms[roomId].host = clients[0];
+          io.to(clients[0]).emit("role", { isHost: true });
+        }
+      }
+    }
+
     console.log("User disconnected:", socket.id);
   });
 });
 
-const PORT = process.env.PORT || 5000;
-
-server.listen(PORT, () => {
-  console.log("Server running on port", PORT);
+server.listen(5000, () => {
+  console.log("Server running on port 5000");
 });

@@ -7,11 +7,11 @@ function App() {
   const [roomId, setRoomId] = useState("");
   const [password, setPassword] = useState("");
   const [joined, setJoined] = useState(false);
+  const [isHost, setIsHost] = useState(false);
 
   const audioRef = useRef(null);
   const isSyncing = useRef(false);
 
-  // auto-fill + auto-join from link
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const room = params.get("room");
@@ -34,11 +34,21 @@ function App() {
   };
 
   useEffect(() => {
+    socket.on("role", ({ isHost }) => {
+      setIsHost(isHost);
+    });
+
+    return () => {
+      socket.off("role");
+    };
+  }, []);
+
+  useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !joined) return;
 
     const sendState = () => {
-      if (isSyncing.current) return;
+      if (isSyncing.current || !isHost) return;
 
       socket.emit("sync_event", {
         roomId,
@@ -107,7 +117,7 @@ function App() {
 
       socket.off("sync_state", handleSync);
     };
-  }, [joined,roomId]);
+  }, [joined, roomId, isHost]);
 
   return (
     <div style={{ padding: "40px" }}>
@@ -132,6 +142,8 @@ function App() {
       ) : (
         <div>
           <h2>Room: {roomId}</h2>
+
+          <h3>{isHost ? "Host" : "Listener"}</h3>
 
           <p>Share this link:</p>
           <input
