@@ -67,7 +67,6 @@ io.on("connection", (socket) => {
         if (clients.length > 0) {
           rooms[roomId].host = clients[0];
 
-          // 🔥 NEW HOST gets role
           io.to(clients[0]).emit("role", { isHost: true });
         }
       }

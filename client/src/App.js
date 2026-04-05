@@ -8,10 +8,12 @@ function App() {
   const [password, setPassword] = useState("");
   const [joined, setJoined] = useState(false);
   const [isHost, setIsHost] = useState(false);
+  const [status, setStatus] = useState("Paused");
 
   const audioRef = useRef(null);
   const isSyncing = useRef(false);
 
+  // auto join via link
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const room = params.get("room");
@@ -29,20 +31,21 @@ function App() {
   }, []);
 
   const joinRoom = () => {
+    if (!roomId || !password) return;
     socket.emit("join_room", { roomId, password });
     setJoined(true);
   };
 
+  // role (host / listener)
   useEffect(() => {
     socket.on("role", ({ isHost }) => {
       setIsHost(isHost);
     });
 
-    return () => {
-      socket.off("role");
-    };
+    return () => socket.off("role");
   }, []);
 
+  // main sync logic
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !joined) return;
@@ -75,7 +78,7 @@ function App() {
       const delay = (Date.now() - state.lastUpdated) / 1000;
       const targetTime = state.currentTime + delay;
 
-      if (Math.abs(audio.currentTime - targetTime) > 0.3) {
+      if (Math.abs(audio.currentTime - targetTime) > 0.25) {
         audio.currentTime = targetTime;
       }
 
@@ -85,10 +88,12 @@ function App() {
         if (audio.paused) {
           await audio.play().catch(() => {});
         }
+        setStatus("Playing");
       } else {
         if (!audio.paused) {
           audio.pause();
         }
+        setStatus("Paused");
       }
 
       setTimeout(() => {
@@ -98,7 +103,7 @@ function App() {
 
     const interval = setInterval(() => {
       sendState();
-    }, 2000);
+    }, 1500);
 
     audio.addEventListener("play", sendState);
     audio.addEventListener("pause", sendState);
@@ -120,41 +125,98 @@ function App() {
   }, [joined, roomId, isHost]);
 
   return (
-    <div style={{ padding: "40px" }}>
-      <h1>Couplyy Listen</h1>
-
+    <div
+      style={{
+        height: "100vh",
+        background: "#121212",
+        color: "white",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        fontFamily: "sans-serif",
+      }}
+    >
       {!joined ? (
-        <div>
+        <div
+          style={{
+            background: "#1e1e1e",
+            padding: "30px",
+            borderRadius: "12px",
+            width: "300px",
+            textAlign: "center",
+          }}
+        >
+          <h2>🎧 Couplyy Listen</h2>
+
           <input
             placeholder="Room ID"
             value={roomId}
             onChange={(e) => setRoomId(e.target.value)}
+            style={{ width: "100%", padding: "10px", marginTop: "10px" }}
           />
-          <br /><br />
+
           <input
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            style={{ width: "100%", padding: "10px", marginTop: "10px" }}
           />
-          <br /><br />
-          <button onClick={joinRoom}>Join</button>
+
+          <button
+            onClick={joinRoom}
+            style={{
+              marginTop: "15px",
+              padding: "10px",
+              width: "100%",
+              background: "#1db954",
+              border: "none",
+              color: "white",
+              fontWeight: "bold",
+              cursor: "pointer",
+            }}
+          >
+            Join Room
+          </button>
         </div>
       ) : (
-        <div>
+        <div
+          style={{
+            background: "#1e1e1e",
+            padding: "30px",
+            borderRadius: "12px",
+            width: "400px",
+            textAlign: "center",
+          }}
+        >
           <h2>Room: {roomId}</h2>
 
-          <h3>{isHost ? "Host" : "Listener"}</h3>
+          <p style={{ marginBottom: "10px", color: "#1db954" }}>
+            {isHost ? "You are Host 🎧" : "Listener 👂"}
+          </p>
 
-          <p>Share this link:</p>
-          <input
-            value={`${window.location.origin}/?room=${roomId}&pass=${password}`}
-            readOnly
-            style={{ width: "400px" }}
-          />
+          <p style={{ marginBottom: "15px" }}>
+            Status: {status}
+          </p>
 
-          <br /><br />
+          <button
+            onClick={() =>
+              navigator.clipboard.writeText(
+                `${window.location.origin}/?room=${roomId}&pass=${password}`
+              )
+            }
+            style={{
+              marginBottom: "15px",
+              padding: "8px 12px",
+              background: "#333",
+              border: "none",
+              color: "white",
+              cursor: "pointer",
+            }}
+          >
+            Copy Invite Link
+          </button>
 
-          <audio ref={audioRef} controls preload="auto">
+          <audio ref={audioRef} controls preload="auto" style={{ width: "100%" }}>
             <source
               src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
               type="audio/mpeg"
