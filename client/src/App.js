@@ -9,11 +9,11 @@ function App() {
   const [joined, setJoined] = useState(false);
   const [isHost, setIsHost] = useState(false);
   const [status, setStatus] = useState("Paused");
+  const [userCount, setUserCount] = useState(1);
 
   const audioRef = useRef(null);
   const isSyncing = useRef(false);
 
-  // auto join via link
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const room = params.get("room");
@@ -36,16 +36,16 @@ function App() {
     setJoined(true);
   };
 
-  // role (host / listener)
   useEffect(() => {
-    socket.on("role", ({ isHost }) => {
-      setIsHost(isHost);
-    });
-
+    socket.on("role", ({ isHost }) => setIsHost(isHost));
     return () => socket.off("role");
   }, []);
 
-  // main sync logic
+  useEffect(() => {
+    socket.on("room_users", ({ count }) => setUserCount(count));
+    return () => socket.off("room_users");
+  }, []);
+
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !joined) return;
@@ -63,23 +63,29 @@ function App() {
       });
     };
 
+    const waitForMetadata = () => {
+      return new Promise((resolve) => {
+        if (audio.readyState >= 2) resolve();
+        else audio.addEventListener("loadedmetadata", resolve, { once: true });
+      });
+    };
+
     const handleSync = async (state) => {
-      const audio = audioRef.current;
       if (!audio) return;
 
       isSyncing.current = true;
 
-      if (audio.readyState < 2) {
-        await new Promise((resolve) => {
-          audio.onloadedmetadata = resolve;
-        });
-      }
+      await waitForMetadata();
 
       const delay = (Date.now() - state.lastUpdated) / 1000;
       const targetTime = state.currentTime + delay;
 
-      if (Math.abs(audio.currentTime - targetTime) > 0.25) {
+      const diff = targetTime - audio.currentTime;
+
+      if (Math.abs(diff) > 0.6) {
         audio.currentTime = targetTime;
+      } else if (Math.abs(diff) > 0.1) {
+        audio.currentTime += diff * 0.4;
       }
 
       audio.volume = state.volume;
@@ -98,27 +104,33 @@ function App() {
 
       setTimeout(() => {
         isSyncing.current = false;
-      }, 100);
+      }, 70);
     };
 
-    const interval = setInterval(() => {
+    const handlePlay = () => {
+      setStatus("Playing");
       sendState();
-    }, 1500);
+    };
 
-    audio.addEventListener("play", sendState);
-    audio.addEventListener("pause", sendState);
+    const handlePause = () => {
+      setStatus("Paused");
+      sendState();
+    };
+
+    const interval = setInterval(sendState, 1000);
+
+    audio.addEventListener("play", handlePlay);
+    audio.addEventListener("pause", handlePause);
     audio.addEventListener("seeked", sendState);
-    audio.addEventListener("volumechange", sendState);
 
     socket.on("sync_state", handleSync);
 
     return () => {
       clearInterval(interval);
 
-      audio.removeEventListener("play", sendState);
-      audio.removeEventListener("pause", sendState);
+      audio.removeEventListener("play", handlePlay);
+      audio.removeEventListener("pause", handlePause);
       audio.removeEventListener("seeked", sendState);
-      audio.removeEventListener("volumechange", sendState);
 
       socket.off("sync_state", handleSync);
     };
@@ -133,7 +145,6 @@ function App() {
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
-        fontFamily: "sans-serif",
       }}
     >
       {!joined ? (
@@ -171,8 +182,6 @@ function App() {
               background: "#1db954",
               border: "none",
               color: "white",
-              fontWeight: "bold",
-              cursor: "pointer",
             }}
           >
             Join Room
@@ -190,13 +199,13 @@ function App() {
         >
           <h2>Room: {roomId}</h2>
 
-          <p style={{ marginBottom: "10px", color: "#1db954" }}>
+          <p style={{ color: "#1db954" }}>
             {isHost ? "You are Host 🎧" : "Listener 👂"}
           </p>
 
-          <p style={{ marginBottom: "15px" }}>
-            Status: {status}
-          </p>
+          <p>{userCount} people listening</p>
+
+          <p>Status: {status}</p>
 
           <button
             onClick={() =>
@@ -204,19 +213,15 @@ function App() {
                 `${window.location.origin}/?room=${roomId}&pass=${password}`
               )
             }
-            style={{
-              marginBottom: "15px",
-              padding: "8px 12px",
-              background: "#333",
-              border: "none",
-              color: "white",
-              cursor: "pointer",
-            }}
           >
             Copy Invite Link
           </button>
 
-          <audio ref={audioRef} controls preload="auto" style={{ width: "100%" }}>
+          <audio
+            ref={audioRef}
+            controls
+            style={{ width: "100%", marginTop: "10px" }}
+          >
             <source
               src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
               type="audio/mpeg"

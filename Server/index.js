@@ -15,14 +15,13 @@ const io = new Server(server, {
 let rooms = {};
 
 io.on("connection", (socket) => {
-  console.log("User connected:", socket.id);
-
   socket.on("join_room", ({ roomId, password }) => {
     if (!rooms[roomId]) {
       rooms[roomId] = {
         password,
         state: null,
         host: socket.id,
+        playlist: [],
       };
     }
 
@@ -35,20 +34,23 @@ io.on("connection", (socket) => {
 
     const isHost = rooms[roomId].host === socket.id;
 
-    // 🔥 Send role to current user
     socket.emit("role", { isHost });
-
-    // 🔥 ALSO ensure host is reinforced
     io.to(rooms[roomId].host).emit("role", { isHost: true });
 
     if (rooms[roomId].state) {
       socket.emit("sync_state", rooms[roomId].state);
     }
+
+    socket.emit("playlist_update", {
+      playlist: rooms[roomId].playlist,
+    });
+
+    const clients = Array.from(io.sockets.adapter.rooms.get(roomId) || []);
+    io.to(roomId).emit("room_users", { count: clients.length });
   });
 
   socket.on("sync_event", ({ roomId, state }) => {
     if (!rooms[roomId]) return;
-
     if (rooms[roomId].host !== socket.id) return;
 
     rooms[roomId].state = {
@@ -59,23 +61,36 @@ io.on("connection", (socket) => {
     socket.to(roomId).emit("sync_state", rooms[roomId].state);
   });
 
+  socket.on("add_song", ({ roomId, url }) => {
+    if (!rooms[roomId]) return;
+    if (rooms[roomId].host !== socket.id) return;
+
+    rooms[roomId].playlist.push(url);
+
+    io.to(roomId).emit("playlist_update", {
+      playlist: rooms[roomId].playlist,
+    });
+  });
+
   socket.on("disconnect", () => {
     for (let roomId in rooms) {
+      const room = io.sockets.adapter.rooms.get(roomId);
+      if (!room) continue;
+
       if (rooms[roomId].host === socket.id) {
-        const clients = Array.from(io.sockets.adapter.rooms.get(roomId) || []);
+        const clients = Array.from(room);
 
         if (clients.length > 0) {
           rooms[roomId].host = clients[0];
-
           io.to(clients[0]).emit("role", { isHost: true });
         }
       }
-    }
 
-    console.log("User disconnected:", socket.id);
+      const updatedClients = Array.from(room);
+      io.to(roomId).emit("room_users", { count: updatedClients.length });
+    }
   });
 });
-
 
 const PORT = process.env.PORT || 5000;
 
